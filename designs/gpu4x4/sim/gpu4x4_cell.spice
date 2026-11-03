@@ -1,0 +1,20 @@
+* Sky130 HD inverter transient check for the accelerator's standard-cell library.
+.lib /home/dead-goat/.ciel/ciel/sky130/versions/0fe599b2afb6708d281543108caf8310912f54af/sky130A/libs.tech/ngspice/sky130.lib.spice tt
+.include /home/dead-goat/.ciel/ciel/sky130/versions/0fe599b2afb6708d281543108caf8310912f54af/sky130A/libs.ref/sky130_fd_sc_hd/spice/sky130_fd_sc_hd.spice
+
+Vpwr vpwr 0 1.8
+Vgnd vgnd 0 0
+Vin in 0 PULSE(0 1.8 1ns 0.1ns 0.1ns 5ns 10ns)
+Xinv in vgnd vgnd vpwr vpwr out sky130_fd_sc_hd__inv_2
+Cload out 0 10f
+
+.control
+set noaskquit
+tran 10ps 25ns
+meas tran t_fall trig v(in) val=0.9 rise=1 targ v(out) val=0.9 fall=1
+meas tran t_rise trig v(in) val=0.9 fall=1 targ v(out) val=0.9 rise=1
+wrdata gpu4x4_cell_waveform.txt v(in) v(out)
+hardcopy gpu4x4_cell_waveform.ps v(in) v(out)
+quit
+.endc
+.end

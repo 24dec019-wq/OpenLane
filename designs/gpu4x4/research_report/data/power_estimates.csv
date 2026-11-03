@@ -1,0 +1,4 @@
+variant,typical_internal_W,typical_switching_W,typical_leakage_W,typical_total_W,activity_annotation,source_report
+D,0.0151,0.0187,5.26e-08,0.0338,none_vectorless_tool_default,designs/gpu_triangle/runs/RUN_2026.11.02_21.37.32/reports/signoff/31-rcx_sta.power.rpt
+I,0.00843,0.00984,5.72e-08,0.0183,none_vectorless_tool_default,designs/gpu_triangle_incremental/runs/RUN_2026.11.02_23.06.43/reports/signoff/31-rcx_sta.power.rpt
+IB,0.011,0.0135,5.82e-08,0.0245,none_vectorless_tool_default,designs/gpu_triangle_incremental_bbox/runs/RUN_2026.11.02_23.16.24/reports/signoff/31-rcx_sta.power.rpt

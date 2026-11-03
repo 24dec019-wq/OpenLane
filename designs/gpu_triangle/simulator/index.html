@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GPU Triangle RTL Simulator</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: #172033;
+      background: #f3f6fb;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; }
+    header {
+      padding: 22px clamp(18px, 4vw, 48px);
+      color: white;
+      background: linear-gradient(115deg, #10243d, #174c73);
+    }
+    header h1 { margin: 0 0 5px; font-size: clamp(22px, 3vw, 32px); }
+    header p { margin: 0; color: #cfdeec; }
+    main {
+      display: grid;
+      grid-template-columns: minmax(320px, 1fr) minmax(270px, 370px);
+      gap: 20px;
+      max-width: 1200px;
+      margin: 24px auto;
+      padding: 0 18px;
+    }
+    .card {
+      background: white;
+      border: 1px solid #dce4ef;
+      border-radius: 14px;
+      box-shadow: 0 6px 22px #1720330a;
+    }
+    .visual { padding: 18px; }
+    .side { display: grid; align-content: start; gap: 16px; }
+    .panel { padding: 18px; }
+    .canvas-wrap { width: min(100%, 680px); margin: 4px auto 0; }
+    canvas {
+      display: block;
+      width: 100%;
+      aspect-ratio: 1;
+      border: 1px solid #b9c6d7;
+      border-radius: 8px;
+      touch-action: none;
+      cursor: crosshair;
+    }
+    h2 { margin: 0 0 14px; font-size: 17px; }
+    .subtle { color: #627087; font-size: 13px; line-height: 1.5; }
+    .labels {
+      display: flex;
+      gap: 17px;
+      justify-content: center;
+      margin-top: 12px;
+      color: #536176;
+      font-size: 12px;
+    }
+    .legend { display: inline-flex; align-items: center; gap: 7px; }
+    .swatch { width: 13px; height: 13px; border-radius: 3px; border: 1px solid #bbc5d2; }
+    .swatch.covered { background: #ff6b35; border-color: #e85a29; }
+    .swatch.empty { background: #edf2f7; }
+    .swatch.outline { background: #2782cc; border-color: #2782cc; }
+    .coordinate-list { display: grid; gap: 10px; }
+    .vertex {
+      display: grid;
+      grid-template-columns: 35px 1fr 1fr;
+      align-items: center;
+      gap: 8px;
+      color: #40516a;
+      font-size: 13px;
+    }
+    .vertex strong { color: #172033; }
+    input[type="number"] {
+      width: 100%;
+      padding: 9px;
+      border: 1px solid #c9d4e2;
+      border-radius: 7px;
+      color: #172033;
+      background: white;
+      font: inherit;
+    }
+    select {
+      width: 100%;
+      padding: 9px;
+      border: 1px solid #c9d4e2;
+      border-radius: 7px;
+      color: #172033;
+      background: white;
+      font: inherit;
+    }
+    button {
+      width: 100%;
+      margin-top: 13px;
+      padding: 11px 14px;
+      border: 0;
+      border-radius: 8px;
+      color: white;
+      background: #17649a;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:hover { background: #114f7c; }
+    button:disabled { opacity: 0.6; cursor: wait; }
+    .status {
+      min-height: 42px;
+      margin-top: 12px;
+      padding: 10px;
+      border-radius: 7px;
+      color: #30425a;
+      background: #f0f5fa;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .stat {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #edf1f6;
+      color: #5b6b80;
+      font-size: 13px;
+    }
+    .stat:last-child { border-bottom: 0; }
+    .stat strong { color: #172033; }
+    .warning {
+      border-left: 3px solid #e5a528;
+      padding: 9px 11px;
+      color: #625126;
+      background: #fff8e6;
+      border-radius: 4px;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    @media (max-width: 800px) {
+      main { grid-template-columns: 1fr; }
+      .side { grid-template-columns: 1fr; }
+      .canvas-wrap { width: min(100%, 600px); }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>GPU Rasterizer RTL Benchmark</h1>
+    <p>Measure real cycle counts and coverage from the project’s Verilog implementation.</p>
+  </header>
+  <main>
+    <section class="card visual">
+      <h2>Framebuffer scan</h2>
+      <p class="subtle">
+        Drag the three vertices, then run the selected RTL. The completed
+        framebuffer is replayed in row-major display order; that animation is
+        not a trace of the clipped variant's internal scan path.
+      </p>
+      <div class="canvas-wrap">
+        <canvas id="frame" width="640" height="640" aria-label="16 by 16 rasterizer framebuffer"></canvas>
+      </div>
+      <div class="labels">
+        <span class="legend"><i class="swatch covered"></i>Covered by RTL</span>
+        <span class="legend"><i class="swatch empty"></i>Uncovered</span>
+        <span class="legend"><i class="swatch outline"></i>Triangle edge</span>
+      </div>
+    </section>
+
+    <aside class="side">
+      <section class="card panel">
+        <h2>Triangle vertices</h2>
+        <p class="subtle">Coordinates are signed 9-bit values in sixteenths of a pixel (range −256…255).</p>
+        <label class="subtle" for="architecture">Rasterizer microarchitecture</label>
+        <select id="architecture">
+          <option value="direct">D — direct edge evaluation</option>
+          <option value="incremental">I — incremental full-frame scan</option>
+          <option value="incremental_bbox">IB — incremental clipped scan</option>
+        </select>
+        <div class="coordinate-list">
+          <div class="vertex"><strong>V0</strong><input id="x0" aria-label="V0 x coordinate" type="number" min="-256" max="255" value="32"><input id="y0" aria-label="V0 y coordinate" type="number" min="-256" max="255" value="32"></div>
+          <div class="vertex"><strong>V1</strong><input id="x1" aria-label="V1 x coordinate" type="number" min="-256" max="255" value="208"><input id="y1" aria-label="V1 y coordinate" type="number" min="-256" max="255" value="32"></div>
+          <div class="vertex"><strong>V2</strong><input id="x2" aria-label="V2 x coordinate" type="number" min="-256" max="255" value="120"><input id="y2" aria-label="V2 y coordinate" type="number" min="-256" max="255" value="208"></div>
+        </div>
+        <div class="vertex subtle" aria-hidden="true"><span></span><span>x (sixteenths)</span><span>y (sixteenths)</span></div>
+        <button id="run">Run RTL rasterizer</button>
+        <div class="status" id="status" role="status">Ready. Drag a vertex or edit its fixed-point coordinates.</div>
+      </section>
+      <section class="card panel">
+        <h2>Simulation result</h2>
+        <div class="stat"><span>RTL backend</span><strong>Icarus Verilog</strong></div>
+        <div class="stat"><span>RTL scan cycles</span><strong id="cycles">—</strong></div>
+        <div class="stat"><span>Covered samples</span><strong id="covered">—</strong></div>
+        <div class="stat"><span>Triangle area sign</span><strong id="winding">—</strong></div>
+        <p class="subtle">The browser requests a new Verilog simulation for every render. The animation replays the framebuffer returned by the RTL after simulation completes.</p>
+      </section>
+      <section class="card panel">
+        <h2>Triangle microarchitecture comparison</h2>
+        <p class="subtle">Runs the same four inputs through all three RTL implementations. Cycle counts and covered samples are parsed from each simulation.</p>
+        <button id="benchmark">Compare three RTL implementations</button>
+        <div class="status" id="benchmark-status" role="status">Benchmark not run yet.</div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;margin-top:10px;border-collapse:collapse;font-size:12px">
+            <thead>
+              <tr style="text-align:left;color:#536176">
+                <th style="padding:7px 4px">Workload</th>
+                <th style="padding:7px 4px">D cycles</th>
+                <th style="padding:7px 4px">I cycles</th>
+                <th style="padding:7px 4px">IB cycles</th>
+                <th style="padding:7px 4px">Covered</th>
+              </tr>
+            </thead>
+            <tbody id="benchmark-results">
+              <tr><td colspan="5" class="subtle" style="padding:8px 4px">Results appear here after the RTL benchmark runs.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="subtle">These are RTL cycle counts, not measured hardware performance. Host simulation runtime covers all three RTL implementations.</p>
+        <div class="stat"><span>Host simulator runtime</span><strong id="benchmark-wall">—</strong></div>
+      </section>
+      <section class="card panel">
+        <h2>90-by-90 INT8 matrix benchmark</h2>
+        <p class="subtle">Runs the real 4-by-4 matrix RTL tile repeatedly through its load/start/read interface and validates all 8,100 outputs.</p>
+        <button id="matrix-benchmark">Run RTL matrix benchmark</button>
+        <div class="status" id="matrix-status" role="status">Matrix benchmark not run yet.</div>
+        <div class="stat"><span>Tile jobs</span><strong id="matrix-tiles">—</strong></div>
+        <div class="stat"><span>Useful / padded MACs</span><strong id="matrix-macs">—</strong></div>
+        <div class="stat"><span>Total / compute cycles</span><strong id="matrix-cycles">—</strong></div>
+        <div class="stat"><span>Output checks</span><strong id="matrix-outputs">—</strong></div>
+      </section>
+      <div class="warning">
+        These are cycle-level simulations of the project RTL, not measured
+        hardware performance. Playback speed is only a display effect.
+      </div>
+    </aside>
+  </main>
+  <script>
+    const canvas = document.getElementById("frame");
+    const ctx = canvas.getContext("2d");
+    const cell = canvas.width / 16;
+    const vertexIds = ["0", "1", "2"];
+    const values = { x0: 32, y0: 32, x1: 208, y1: 32, x2: 120, y2: 208 };
+    let rows = Array.from({ length: 16 }, () => Array(16).fill(false));
+    let visited = 0;
+    let dragging = -1;
+    let timer = null;
+    let scanPosition = -1;
+
+    function qToPixel(value) { return value / 16; }
+    function point(index) {
+      return {
+        x: qToPixel(values[`x${index}`]),
+        y: qToPixel(values[`y${index}`])
+      };
+    }
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let y = 0; y < 16; y++) {
+        for (let x = 0; x < 16; x++) {
+          const n = y * 16 + x;
+          let fill = "#edf2f7";
+          if (n < visited && rows[y][x]) fill = "#ff6b35";
+          ctx.fillStyle = fill;
+          ctx.fillRect(x * cell + 1, y * cell + 1, cell - 2, cell - 2);
+        }
+      }
+
+      ctx.strokeStyle = "#b8c5d5";
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 16; i++) {
+        ctx.beginPath();
+        ctx.moveTo(i * cell, 0);
+        ctx.lineTo(i * cell, canvas.height);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, i * cell);
+        ctx.lineTo(canvas.width, i * cell);
+        ctx.stroke();
+      }
+
+      const points = [0, 1, 2].map(point);
+      ctx.strokeStyle = "#2782cc";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      points.forEach((p, i) => {
+        const x = p.x * cell;
+        const y = p.y * cell;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.closePath();
+      ctx.stroke();
+
+      points.forEach((p, i) => {
+        const x = p.x * cell;
+        const y = p.y * cell;
+        ctx.beginPath();
+        ctx.fillStyle = "#ffffff";
+        ctx.strokeStyle = "#145a8d";
+        ctx.lineWidth = 3;
+        ctx.arc(x, y, 9, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = "#10243d";
+        ctx.font = "bold 13px system-ui";
+        ctx.fillText(`V${i}`, x + 10, y - 10);
+      });
+
+      if (scanPosition >= 0 && scanPosition < 256) {
+        const x = scanPosition % 16;
+        const y = Math.floor(scanPosition / 16);
+        ctx.strokeStyle = "#111827";
+        ctx.lineWidth = 3;
+        ctx.strokeRect(x * cell + 2, y * cell + 2, cell - 4, cell - 4);
+      }
+    }
+
+    function readCoordinates() {
+      for (const id of vertexIds) {
+        for (const axis of ["x", "y"]) {
+          const name = `${axis}${id}`;
+          const input = document.getElementById(name);
+          const number = Number(input.value);
+          if (!Number.isInteger(number) || number < -256 || number > 255) {
+            throw new Error(`${name} must be an integer from −256 through 255.`);
+          }
+          values[name] = number;
+        }
+      }
+      return { ...values };
+    }
+
+    function setInputs() {
+      for (const [name, value] of Object.entries(values)) {
+        document.getElementById(name).value = value;
+      }
+    }
+
+    function replay() {
+      const status = document.getElementById("status");
+      if (visited >= 256) {
+        scanPosition = -1;
+        status.textContent = "RTL simulation complete. The displayed framebuffer is the RTL output.";
+        return;
+      }
+      scanPosition = visited;
+      visited++;
+      draw();
+      status.textContent = `Displaying RTL framebuffer pixel ${visited} of 256 (x=${(visited - 1) % 16}, y=${Math.floor((visited - 1) / 16)}).`;
+      timer = setTimeout(replay, 8);
+    }
+
+    async function runSimulation() {
+      const button = document.getElementById("run");
+      const status = document.getElementById("status");
+      clearTimeout(timer);
+      button.disabled = true;
+      visited = 0;
+      scanPosition = -1;
+      rows = Array.from({ length: 16 }, () => Array(16).fill(false));
+      draw();
+      try {
+        const request = {
+          ...readCoordinates(),
+          architecture: document.getElementById("architecture").value
+        };
+        status.textContent = "Running the Verilog RTL simulation…";
+        const response = await fetch("/api/render", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(request)
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "RTL simulation failed.");
+        rows = result.rows;
+        document.getElementById("cycles").textContent = `${result.scanCycles} cycles`;
+        document.getElementById("covered").textContent = `${result.coveredPixels} / 256`;
+        const area = (request.x1 - request.x0) * (request.y2 - request.y0)
+                   - (request.y1 - request.y0) * (request.x2 - request.x0);
+        document.getElementById("winding").textContent =
+          area === 0 ? "Degenerate" : (area > 0 ? "Positive" : "Negative");
+        status.textContent =
+          `RTL simulation complete (${result.architecture}); replaying its framebuffer.`;
+        draw();
+        replay();
+      } catch (error) {
+        status.textContent = error.message;
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    async function runBenchmark() {
+      const button = document.getElementById("benchmark");
+      const status = document.getElementById("benchmark-status");
+      const tbody = document.getElementById("benchmark-results");
+      button.disabled = true;
+      status.textContent = "Running the four workloads on D, I, and IB…";
+      tbody.replaceChildren();
+      try {
+        const response = await fetch("/api/benchmark", { method: "POST" });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "RTL benchmark failed.");
+        const names = {
+          full_viewport: "Full viewport",
+          default_triangle: "Reference triangle",
+          small_triangle: "Small triangle",
+          degenerate: "Degenerate input"
+        };
+        const workloadOrder = [
+          "full_viewport",
+          "default_triangle",
+          "small_triangle",
+          "degenerate"
+        ];
+        for (const key of workloadOrder) {
+          const direct = result.variants.direct.cases[key];
+          const incremental = result.variants.incremental.cases[key];
+          const clipped = result.variants.incremental_bbox.cases[key];
+          if (new Set([
+            direct.coveredPixels,
+            incremental.coveredPixels,
+            clipped.coveredPixels
+          ]).size !== 1) {
+            throw new Error(`Coverage mismatch between RTL variants for ${key}.`);
+          }
+          const row = document.createElement("tr");
+          const fields = [
+            names[key] || key,
+            direct.scanCycles,
+            incremental.scanCycles,
+            clipped.scanCycles,
+            direct.coveredPixels
+          ];
+          for (const value of fields) {
+            const cell = document.createElement("td");
+            cell.textContent = String(value);
+            cell.style.padding = "8px 4px";
+            cell.style.borderTop = "1px solid #edf1f6";
+            row.appendChild(cell);
+          }
+          tbody.appendChild(row);
+        }
+        document.getElementById("benchmark-wall").textContent =
+          `${result.hostSimulatorWallMs} ms on this host`;
+        status.textContent =
+          "Completed identical Verilog workloads; coverage agrees across D, I, and IB.";
+      } catch (error) {
+        status.textContent = error.message;
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    async function runMatrixBenchmark() {
+      const button = document.getElementById("matrix-benchmark");
+      const status = document.getElementById("matrix-status");
+      button.disabled = true;
+      status.textContent = "Running the tiled INT8 matrix multiplication in RTL…";
+      try {
+        const response = await fetch("/api/matmul", { method: "POST" });
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || "Matrix RTL benchmark failed.");
+        }
+        document.getElementById("matrix-tiles").textContent =
+          `${result.tileJobs} tiles; padded dimension ${result.paddedDimension}`;
+        document.getElementById("matrix-macs").textContent =
+          `${result.usefulMacs.toLocaleString()} / ${result.paddedTileMacs.toLocaleString()}`;
+        document.getElementById("matrix-cycles").textContent =
+          `${result.rtlCycles.toLocaleString()} / ${result.computeBusyCycles.toLocaleString()}`;
+        document.getElementById("matrix-outputs").textContent =
+          `${result.checkedOutputs.toLocaleString()} passed`;
+        status.textContent =
+          `${result.rows}×${result.columns} ${result.precision}; host RTL simulation ${result.hostSimulatorWallMs} ms.`;
+      } catch (error) {
+        status.textContent = error.message;
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    function canvasPoint(event) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: ((event.clientX - rect.left) / rect.width) * 16,
+        y: ((event.clientY - rect.top) / rect.height) * 16
+      };
+    }
+
+    canvas.addEventListener("pointerdown", event => {
+      const p = canvasPoint(event);
+      const nearest = [0, 1, 2].map((i) => {
+        const v = point(i);
+        return Math.hypot((v.x - p.x) * cell, (v.y - p.y) * cell);
+      });
+      const index = nearest.indexOf(Math.min(...nearest));
+      if (nearest[index] <= 24) {
+        dragging = index;
+        canvas.setPointerCapture(event.pointerId);
+      }
+    });
+    canvas.addEventListener("pointermove", event => {
+      if (dragging < 0) return;
+      const p = canvasPoint(event);
+      values[`x${dragging}`] = Math.max(-256, Math.min(255, Math.round(p.x * 16)));
+      values[`y${dragging}`] = Math.max(-256, Math.min(255, Math.round(p.y * 16)));
+      setInputs();
+      draw();
+    });
+    canvas.addEventListener("pointerup", () => { dragging = -1; });
+    canvas.addEventListener("pointercancel", () => { dragging = -1; });
+    document.getElementById("run").addEventListener("click", runSimulation);
+    document.getElementById("benchmark").addEventListener("click", runBenchmark);
+    document.getElementById("matrix-benchmark").addEventListener("click", runMatrixBenchmark);
+    for (const id of vertexIds) {
+      for (const axis of ["x", "y"]) {
+        document.getElementById(`${axis}${id}`).addEventListener("input", () => {
+          try {
+            readCoordinates();
+            draw();
+          } catch (error) {
+            document.getElementById("status").textContent = error.message;
+          }
+        });
+      }
+    }
+    draw();
+    runSimulation();
+  </script>
+</body>
+</html>

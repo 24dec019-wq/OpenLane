@@ -1,0 +1,8 @@
+cohort,case_count,D_mean_cycles,D_median_cycles,D_p95_cycles,I_mean_cycles,I_median_cycles,I_p95_cycles,IB_mean_cycles,IB_median_cycles,IB_p95_cycles
+all,136,254.12,256.00,256,254.12,256.00,256,69.46,49.00,195
+nondegenerate,135,256.00,256.00,256,256.00,256.00,256,69.97,49.00,195
+degenerate,1,0.00,0.00,0,0.00,0.00,0,0.00,0.00,0
+nondegenerate_empty_bbox,31,256.00,256.00,256,256.00,256.00,256,0.00,0.00,0
+nondegenerate_bbox_1_16,9,256.00,256.00,256,256.00,256.00,256,9.44,6.00,16
+nondegenerate_bbox_17_64,36,256.00,256.00,256,256.00,256.00,256,38.92,40.00,56
+nondegenerate_bbox_65_plus,59,256.00,256.00,256,256.00,256.00,256,134.92,121.00,224

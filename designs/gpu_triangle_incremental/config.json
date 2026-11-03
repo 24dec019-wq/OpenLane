@@ -1,0 +1,13 @@
+{
+    "DESIGN_NAME": "gpu_triangle",
+    "VERILOG_FILES": "dir::../gpu_triangle/src/gpu_triangle_incremental.v",
+    "CLOCK_PERIOD": 20.0,
+    "CLOCK_PORT": "clk",
+    "CLOCK_NET": "ref::$CLOCK_PORT",
+    "FP_CORE_UTIL": 35,
+    "pdk::sky130*": {
+        "scl::sky130_fd_sc_hd": {
+            "CLOCK_PERIOD": 20.0
+        }
+    }
+}
